@@ -146,13 +146,13 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\CryptoHelperLibrary\CryptoHelperLibrary.csproj">
+    <ProjectReference Include="..\CryptoHelperLibrary\LAB3 - CryptoHelperLibrary.csproj">
       <Project>{3f66360a-5055-4a8a-b671-72620ea3fd11}</Project>
-      <Name>CryptoHelperLibrary</Name>
+      <Name>LAB3 - CryptoHelperLibrary</Name>
     </ProjectReference>
-    <ProjectReference Include="..\ImageHelperLibrary\ImageHelperLibrary.csproj">
+    <ProjectReference Include="..\ImageHelperLibrary\LAB3 - ImageHelperLibrary.csproj">
       <Project>{b18fd96b-b284-4a30-912f-02f6bc187484}</Project>
-      <Name>ImageHelperLibrary</Name>
+      <Name>LAB3 - ImageHelperLibrary</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
