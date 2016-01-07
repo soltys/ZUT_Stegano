@@ -12,6 +12,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Xml.Serialization;
+using CryptoHelperLibrary;
 using ImageHelperLibrary;
 using LSBInBMP.View.ViewModel;
 using Microsoft.Win32;
@@ -33,9 +34,9 @@ namespace LSBInBMP
         {
             _openFileCommand = new RelayCommand(OpenFileAction);
             _sourceImage = new BitmapImage(new Uri("/source.bmp", UriKind.Relative));
-            
-            _message =
-                @"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam tristique commodo neque ac venenatis. Donec tincidunt orci at turpis vulputate euismod. Vestibulum tempor interdum massa, non tincidunt nisl egestas ac. Integer iaculis, leo vitae laoreet porttitor, metus urna maximus ipsum, a luctus ligula dolor eu lectus. Fusce a libero eleifend, volutpat mi ut, scelerisque quam. Nulla facilisi. Donec et egestas felis. Aenean sollicitudin lorem non mi laoreet rhoncus.";
+
+            Message = @"Lorem ipsum dolor sit amet";
+            Password = "pass";
 
             _insertMessage = new RelayCommand(InsertMessageAction);
             _readMessage = new RelayCommand(ReadMessageAction);
@@ -71,22 +72,8 @@ namespace LSBInBMP
             var bmpData = ms.ToArray();
             BitmapManipulator manipulator = new BitmapManipulator(bmpData);
             var messageRead = manipulator.ReadMessage();
-
+            messageRead = Cryptography.Decrypt(messageRead, this.Password);
             MessageBox.Show(messageRead, "Odczytana wiadomość");
-        }
-
-        private static byte[] ReadFully(Stream input)
-        {
-            byte[] buffer = new byte[16 * 1024];
-            using (MemoryStream ms = new MemoryStream())
-            {
-                int read;
-                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    ms.Write(buffer, 0, read);
-                }
-                return ms.ToArray();
-            }
         }
         private void InsertMessageAction(object parameter)
         {
@@ -94,12 +81,13 @@ namespace LSBInBMP
 
             MemoryStream ms = new MemoryStream();
             BitmapEncoder encode = new BmpBitmapEncoder();
-            
-            encode.Frames.Add(BitmapFrame.Create(_sourceImage));            
+
+            encode.Frames.Add(BitmapFrame.Create(_sourceImage));
             encode.Save(ms);
             var bmpData = ms.ToArray();
             BitmapManipulator manipulator = new BitmapManipulator(bmpData);
-            manipulator.InsertMessage(message);
+            string encryptedMessage = Cryptography.Encrypt(message, this.Password);
+            manipulator.InsertMessage(encryptedMessage);
 
             var imageSource = new BitmapImage();
             MemoryStream imageMS = new MemoryStream(manipulator.Bytes);

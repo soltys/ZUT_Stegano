@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -11,98 +10,6 @@ using System.Threading.Tasks;
 
 namespace ImageHelperLibrary
 {
-    public class Pixel
-    {
-        public int X { get; set; }
-        public int Y { get; set; }
-        public Color Color { get; set; }
-        public byte[] ColorBytes
-        {
-            get { return BitConverter.GetBytes(Color.ToArgb()); }
-        }
-
-        public byte Red
-        {
-            get { return ColorBytes[0]; }
-        }
-
-        public byte Green
-        {
-            get { return ColorBytes[1]; }
-        }
-
-        public byte Blue
-        {
-            get { return ColorBytes[2]; }
-        }
-
-
-    }
-
-    public class BitmapPixelEnumerator : IEnumerator<Pixel>, IEnumerable<Pixel>
-    {
-        private Bitmap _bitmap;
-        private int _y;
-        private int _x;
-
-        public BitmapPixelEnumerator(Bitmap bitmap)
-        {
-            _bitmap = bitmap;
-            Reset();
-        }
-        public void Dispose()
-        {
-
-        }
-
-        public bool MoveNext()
-        {
-            var isDone = _x == _bitmap.Width && _y == _bitmap.Height;
-
-            _x++;
-            if (_bitmap.Width == _x)
-            {
-                _x = 0;
-                _y++;
-            }
-
-            return !isDone;
-        }
-
-        public void Reset()
-        {
-            _x = 0;
-            _y = 0;
-        }
-
-        public Pixel Current
-        {
-            get
-            {
-                var p = new Pixel();
-                p.X = _x;
-                p.Y = _y;
-                p.Color = _bitmap.GetPixel(_x, _y);
-                return p;
-            }
-
-        }
-
-        object IEnumerator.Current
-        {
-            get { return Current; }
-        }
-
-        public IEnumerator<Pixel> GetEnumerator()
-        {
-            return this;
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return GetEnumerator();
-        }
-    }
     public class BitmapManipulator
     {
         private Bitmap _img;
@@ -119,15 +26,6 @@ namespace ImageHelperLibrary
 
         }
 
-        public void Strike()
-        {
-            for (int i = 0; i < _img.Width; i++)
-            {
-                _img.SetPixel(i, i, Color.Black);
-            }
-
-        }
-
         public byte[] Bytes
         {
             get
@@ -139,22 +37,32 @@ namespace ImageHelperLibrary
                     data = ms.ToArray();
 
                 }
-
                 return data;
-
             }
         }
+
+        const int MessageLength = 4;
+        const int MessageLengthPadding = 2;
+
+        const int BitsPerByte = 8;
+        const int BitsPerPixel = 6;
+
+        const int BitsWithMessageLengthAndPadding = (MessageLength + MessageLengthPadding) * BitsPerByte;
+        const int PixelsWithMessageLengthAndPadding = BitsWithMessageLengthAndPadding / BitsPerPixel;
 
         public void InsertMessage(string message)
         {
             Stopwatch watch = new Stopwatch();
             watch.Start();
             var dataToEncode = Encoding.ASCII.GetBytes(message);
-            byte[] dataWithMeta = new byte[dataToEncode.Length + 4 + 2];
+
+            byte[] dataWithMeta = new byte[dataToEncode.Length + MessageLength + MessageLengthPadding];
+
+
             //four bytes for message length; 2 bytes for padding
             var messageLengthInfo = BitConverter.GetBytes(message.Length);
-            Array.Copy(messageLengthInfo, dataWithMeta, 4);
-            Array.Copy(dataToEncode, 0, dataWithMeta, 6, dataToEncode.Length);
+            Array.Copy(messageLengthInfo, dataWithMeta, MessageLength);
+            Array.Copy(dataToEncode, 0, dataWithMeta, MessageLength + MessageLengthPadding, dataToEncode.Length);
 
             BitArray bits = new BitArray(dataWithMeta);
             var e = bits.GetEnumerator();
@@ -184,8 +92,13 @@ namespace ImageHelperLibrary
             Debug.WriteLine(watch.Elapsed);
         }
 
-
-
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="e"></param>
+        /// <param name="oldBlue"></param>
+        /// <param name="newBlue"></param>
+        /// <returns>Returns true if enumerator has ended</returns>
         private bool InsertData(IEnumerator e, byte oldBlue,
             out byte newBlue)
         {
@@ -222,32 +135,11 @@ namespace ImageHelperLibrary
                 blueBits[2] = !blueBits[2];
             }
 
-            newBlue = ConvertColorBitsToByte(blueBits);
+            newBlue = blueBits.ConvertColorBitsToByte();
             return false;
         }
 
-        byte ConvertColorBitsToByte(BitArray bits)
-        {
-            if (bits.Count != 8)
-            {
-                throw new ArgumentException("bits");
-            }
-            byte[] bytes = new byte[1];
-            bits.CopyTo(bytes, 0);
-            return bytes[0];
-        }
-
-        int ConvertBitsToWord(BitArray bits)
-        {
-            if (bits.Count < 32 && bits.Count > 48)
-            {
-                throw new ArgumentException("bits");
-            }
-            byte[] bytes = new byte[6];
-            bits.CopyTo(bytes, 0);
-            return BitConverter.ToInt32(bytes, 0);
-        }
-
+      
 
         /// <summary>
         /// Expected 471 length
@@ -256,10 +148,10 @@ namespace ImageHelperLibrary
         public string ReadMessage()
         {
             var bmpPixelEnumerator = new BitmapPixelEnumerator(_img);
-            var encodedLength = bmpPixelEnumerator.Take(8).ToArray();
+            var encodedLength = bmpPixelEnumerator.Take(PixelsWithMessageLengthAndPadding).ToArray();
 
             int indexLengthBit = 0;
-            var ba = new BitArray(48);
+            var ba = new BitArray(BitsWithMessageLengthAndPadding);
             foreach (var pixel in encodedLength)
             {
                 indexLengthBit = ReadTwoBits(pixel.Blue, ba, indexLengthBit);
@@ -267,12 +159,12 @@ namespace ImageHelperLibrary
                 indexLengthBit = ReadTwoBits(pixel.Red, ba, indexLengthBit);
             }
 
-            var messageLength = ConvertBitsToWord(ba);
+            var messageLength = ba.ConvertBitsToWord();
 
             int indexMessageBit = 0;
-            var messageBitArray = new BitArray(messageLength * 8);
+            var messageBitArray = new BitArray(messageLength * PixelsWithMessageLengthAndPadding);
             bmpPixelEnumerator.Reset();
-            var encodedPixels = bmpPixelEnumerator.Skip(8).Take((int)Math.Ceiling(messageLength * 8d / 6d));
+            var encodedPixels = bmpPixelEnumerator.Skip(PixelsWithMessageLengthAndPadding).Take((int)Math.Ceiling(messageLength * (double)PixelsWithMessageLengthAndPadding / (double)BitsPerPixel));
             foreach (var pixel in encodedPixels)
             {
                 indexMessageBit = ReadTwoBits(pixel.Blue, messageBitArray, indexMessageBit);
@@ -291,9 +183,9 @@ namespace ImageHelperLibrary
                     break;
                 }
             }
-            
+
             byte[] messageBytes = new byte[messageLength];
-            messageBitArray.CopyTo(messageBytes,0);
+            messageBitArray.CopyTo(messageBytes, 0);
             var message = Encoding.ASCII.GetString(messageBytes);
 
             return message;
